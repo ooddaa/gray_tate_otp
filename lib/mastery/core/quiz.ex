@@ -24,4 +24,21 @@ defmodule Mastery.Core.Quiz do
           # %{"template_name" => integer}
           record: Map
         }
+  def new(fields) do
+    struct!(__MODULE__, fields)
+  end
+
+  defp add_template(quiz, fields) do
+    template = Template.new(fields)
+    # Map.put(quiz, template.name, )
+    # update_in(quiz, [template.name, fn list -> [template | list] end])
+    templates =
+      quiz.templates
+      |> update_in([template.category], &add_template_or_nil(&1, template))
+
+    %{quiz | templates: templates}
+  end
+
+  defp add_template_or_nil(nil, template), do: [template]
+  defp add_template_or_nil(templates, template), do: [template | templates]
 end
