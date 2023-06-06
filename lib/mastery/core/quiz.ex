@@ -41,4 +41,68 @@ defmodule Mastery.Core.Quiz do
 
   defp add_template_or_nil(nil, template), do: [template]
   defp add_template_or_nil(templates, template), do: [template | templates]
+
+  defp select_question(%__MODULE__{templates: t}) when map_size(t) == 0, do: nil
+
+  defp select_question(quiz) do
+    quiz
+    |> pick_current_question
+    |> move_template(:used)
+    |> reset_template_cycle
+  end
+
+  defp pick_current_question(%__MODULE__{templates: templates}) do
+    Map.put(
+      quiz,
+      :current_question,
+      select_random_question(templates)
+    )
+  end
+
+  defp select_random_question(templates) when map_size(templates) == 0, do: nil
+
+  defp select_random_question(templates) do
+    # with {_category, question} <- Enum.random(templates) do
+    #   Enum.random(question)
+    # end
+    Enum.random(templates)
+    |> elem(1)
+    |> Enum.random()
+    |> Question.new()
+  end
+
+  defp move_template(quiz, field) do
+    quiz
+    |> remove_template_from_category()
+    |> add_template_to_field(field)
+  end
+
+  defp template(quiz), do: quiz.current_question.template
+
+  defp remove_template_from_category(quiz) do
+    # find template by name and remove
+    used_template = template(quiz)
+
+    new_category =
+      quiz.templates
+      |> Map.fetch!(used_template.category)
+      |> List.delete(used_template)
+
+    new_templates =
+      if new_category == [] do
+        Map.delete(quiz.templates[template.category])
+      else
+        Map.put(quiz.templates, used_template.category, new_category)
+        # put_in(map)
+      end
+
+    %{quiz | templates: new_templates}
+  end
+
+  defp add_template_to_field(quiz, field) do
+    # either to :used or :mastered
+    template = template(quiz)
+    list = Map.get(quiz, field)
+    Map.put(quiz, field, template)
+  end
 end
