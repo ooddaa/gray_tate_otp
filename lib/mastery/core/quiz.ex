@@ -46,12 +46,23 @@ defmodule Mastery.Core.Quiz do
 
   defp select_question(quiz) do
     quiz
-    |> pick_current_question
+    |> pick_current_question()
     |> move_template(:used)
-    |> reset_template_cycle
+    |> reset_template_cycle()
   end
 
-  defp pick_current_question(%__MODULE__{templates: templates}) do
+  defp reset_template_cycle(%__MODULE__{templates: templates, used: used} = quiz)
+       when map_size(templates) == 0 do
+    %__MODULE__{
+      quiz
+      | templates: Enum.group_by(used, fn template -> template.category end),
+        used: []
+    }
+  end
+
+  defp reset_template_cycle(quiz), do: quiz
+
+  defp pick_current_question(%__MODULE__{templates: templates} = quiz) do
     Map.put(
       quiz,
       :current_question,
@@ -90,7 +101,7 @@ defmodule Mastery.Core.Quiz do
 
     new_templates =
       if new_category == [] do
-        Map.delete(quiz.templates[template.category])
+        Map.delete(quiz.templates[used_template.category])
       else
         Map.put(quiz.templates, used_template.category, new_category)
         # put_in(map)
