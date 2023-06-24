@@ -28,7 +28,7 @@ defmodule Mastery.Core.Quiz do
     struct!(__MODULE__, fields)
   end
 
-  defp add_template(quiz, fields) do
+  def add_template(quiz, fields) do
     template = Template.new(fields)
     # Map.put(quiz, template.name, )
     # update_in(quiz, [template.name, fn list -> [template | list] end])
@@ -39,20 +39,21 @@ defmodule Mastery.Core.Quiz do
     %{quiz | templates: templates}
   end
 
-  defp add_template_or_nil(nil, template), do: [template]
-  defp add_template_or_nil(templates, template), do: [template | templates]
+  def add_template_or_nil(nil, template), do: [template]
+  def add_template_or_nil(templates, template), do: [template | templates]
 
-  defp select_question(%__MODULE__{templates: t}) when map_size(t) == 0, do: nil
+  def select_question(%__MODULE__{templates: t}) when map_size(t) == 0, do: nil
 
-  defp select_question(quiz) do
+  def select_question(quiz) do
     quiz
     |> pick_current_question()
     |> move_template(:used)
     |> reset_template_cycle()
   end
 
-  defp reset_template_cycle(%__MODULE__{templates: templates, used: used} = quiz)
+  def reset_template_cycle(%__MODULE__{templates: templates, used: used} = quiz)
        when map_size(templates) == 0 do
+        IO.inspect(used, label: "used")
     %__MODULE__{
       quiz
       | templates: Enum.group_by(used, fn template -> template.category end),
@@ -60,9 +61,9 @@ defmodule Mastery.Core.Quiz do
     }
   end
 
-  defp reset_template_cycle(quiz), do: quiz
+  def reset_template_cycle(quiz), do: quiz
 
-  defp pick_current_question(%__MODULE__{templates: templates} = quiz) do
+  def pick_current_question(%__MODULE__{templates: templates} = quiz) do
     Map.put(
       quiz,
       :current_question,
@@ -70,9 +71,9 @@ defmodule Mastery.Core.Quiz do
     )
   end
 
-  defp select_random_question(templates) when map_size(templates) == 0, do: nil
+  def select_random_question(templates) when map_size(templates) == 0, do: nil
 
-  defp select_random_question(templates) do
+  def select_random_question(templates) do
     # with {_category, question} <- Enum.random(templates) do
     #   Enum.random(question)
     # end
@@ -82,15 +83,15 @@ defmodule Mastery.Core.Quiz do
     |> Question.new()
   end
 
-  defp move_template(quiz, field) do
+  def move_template(quiz, field) do
     quiz
     |> remove_template_from_category()
     |> add_template_to_field(field)
   end
 
-  defp template(quiz), do: quiz.current_question.template
+  def template(quiz), do: quiz.current_question.template
 
-  defp remove_template_from_category(quiz) do
+  def remove_template_from_category(quiz) do
     # find template by name and remove
     used_template = template(quiz)
 
@@ -101,19 +102,69 @@ defmodule Mastery.Core.Quiz do
 
     new_templates =
       if new_category == [] do
-        Map.delete(quiz.templates[used_template.category])
+        Map.delete(quiz.templates, used_template.category)
       else
         Map.put(quiz.templates, used_template.category, new_category)
         # put_in(map)
       end
 
-    %{quiz | templates: new_templates}
+      Map.put(quiz, :templates, new_templates)
+    # %{quiz | templates: new_templates}
   end
 
-  defp add_template_to_field(quiz, field) do
+  def add_template_to_field(quiz, field) do
     # either to :used or :mastered
     template = template(quiz)
     list = Map.get(quiz, field)
-    Map.put(quiz, field, template)
+    Map.put(quiz, field, [template|list])
+  end
+
+  def answer_question(quiz, %Response{correct: true} = response) do
+    new_quiz =
+      quiz
+      |> inc_record()
+      |> save_response(response)
+
+    maybe_advance(new_quiz, mastered?(new_quiz))
+  end
+
+  def answer_question(quiz, %Response{correct: false} = response) do
+    quiz
+    |> reset_record()
+    |> save_response(response)
+  end
+
+  def save_response(quiz, response) do
+    Map.put(quiz, :last_response, response)
+  end
+
+  def mastered?(quiz) do
+    score = Map.get(quiz.record, template(quiz).name, 0)
+    score == quiz.mastery
+  end
+
+  def inc_record(%{current_question: question} = quiz) do
+    new_record = Map.update(quiz.record, question.template.name, 0, &(&1 + 1))
+    Map.put(quiz, :record, new_record)
+  end
+
+  def maybe_advance(quiz, false = _mastered), do: quiz
+  def maybe_advance(quiz, true = _mastered), do: advance(quiz)
+
+  def advance(quiz) do
+    quiz
+    |> move_template(:mastered)
+    |> reset_record()
+    |> reset_used()
+  end
+
+  def reset_record(%{current_question: question} = quiz) do
+    Map.put(quiz, :record, Map.delete(quiz.record, question.template.name))
+  end
+
+  def reset_used(%{current_question: question} = quiz) do
+    Map.put(quiz, :used, List.delete(quiz.used, question.template))
   end
 end
+
+# checker = fn sub, answer -> sub[:left] + sub[:right] == String.to_integer(answer) end
